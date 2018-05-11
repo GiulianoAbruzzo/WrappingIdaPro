@@ -20,11 +20,31 @@ Da prompt dei comandi di windows:
 (Inserire la cartella di ida nella PATH o inserire la path intera di ida.exe)
 
 ```C 
-ida.exe -A -OIDAPython:script_crea_grafi.py file.out
+$ ida.exe -A -OIDAPython:script_crea_grafi.py file.out
 ```
 
 Per 64bit:
 
 ```C 
-ida64.exe -A -OIDAPython:script_crea_grafi.py a_x86_64.out
+$ ida64.exe -A -OIDAPython:script_crea_grafi.py a_x86_64.out
+```
+
+### Requisiti
+
+- Networkx
+
+```C 
+$ pip install networkx
+```
+
+- Pydot
+
+```C 
+$ pip install pydot
+```
+
+- Graphviz
+
+```C
+https://www.graphviz.org/download/
 ```
