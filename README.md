@@ -5,6 +5,12 @@ Wrapping di IdaPro con l'utilizzo di IdaPython
 ### Specifiche progetto
 
 ```C 
+chiamaComandi.py 
+```
+
+Quando viene eseguito chiama gli altri script ne aspetta la terminazione e crea un dizionario json che printa su schermo
+
+```C 
 script_crea_grafi.py 
 ```
 Crea una cartella contenente tutti i Control Flow Graph delle funzioni del binario in input
