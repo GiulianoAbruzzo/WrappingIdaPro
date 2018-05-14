@@ -23,6 +23,7 @@ def main():
 			
 	#printa il dizionario
 	print creaDizGrafi(input)
+	#print creaDizFunzioni(input)
 	
 def creaDizGrafi(input):
 	print "Creazione dizionario in corso..."
@@ -54,8 +55,21 @@ def creaDizGrafi(input):
 	print "Creazione dizionario terminata"
 	return json.dumps(dizionario)
 	
-#def creaDizFunzioni(input):
-		#in creazione...
+def creaDizFunzioni(input):
+	#crea dizionario 
+	dizionario = dict()
+
+	print "Creazione dizionario in corso..."
+	
+	#apro il file per ogni riga salvo nel dizionario nomefunzione e indirizzo di partenza (nel file txt di appoggio 
+	#sono separati dalla stringa ////
+	
+	with open("ListaFunzioni_"+input+".txt","r") as f:
+		for linea in f:
+			dizionario[linea[:linea.index("////")].strip()] = linea[linea.index("////")+4:].strip()
+	
+	f.close()
+	return dizionario
 
 if __name__ == "__main__":
     main()

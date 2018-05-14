@@ -13,8 +13,9 @@ for segea in Segments():
 	for funcea in Functions(segea, SegEnd(segea)):
 		functionName = GetFunctionName(funcea)
 		for (startea, endea) in Chunks(funcea):
-			text_file.write(functionName+"\n")
-
+			#//// separatore
+			text_file.write(functionName+"////"+str(startea)+"\n")
+			
 #chiudi il file	e termina	
 text_file.close()
 idc.Exit(0)
