@@ -3,7 +3,7 @@ from idaapi import *
 import os
 
 #crea il file
-text_file = open("ListaFunzioni.txt", "w")
+text_file = open("ListaFunzioni_"+idaapi.get_root_filename()+".txt", "w")
 
 #aspetta il caricamento
 idaapi.autoWait()
