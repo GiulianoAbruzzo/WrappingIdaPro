@@ -43,7 +43,7 @@ def main():
                 
                     #se il nodo non e' presente nel grafo lo aggiungo
                     if (str(n.id) not in G.nodes()):
-                        G.add_node(str(n.id),label='',asm='')
+                        G.add_node(str(n.id),label='',asm='',address=n.startEA)
                         
                     #n contiene anche il metodo succs che mi ritona l id dei nodi successori
                     successors = []
@@ -58,10 +58,6 @@ def main():
                     #salvo in queste variabili gli hex e le istruzioni
                     totIstruzioni=""
                     totHex=""
-                    
-                    #se e' il nodo di partenza aggiungo il nome della funzione
-                    if (str(n.id)=="0"):
-                        totIstruzioni=nomeFunzione+":"+"\n"
                     
                     #faccio un decoding delle istruzioni del blocco parto dalla prima istruzione del nodo
                     #mi fermo quando arrivo all indirizzo di fine del nodo
@@ -79,7 +75,7 @@ def main():
                         
                         #concateno alle due stringhe
                         totIstruzioni+=disasm+"\n"
-                        totHex+=str(binascii.hexlify(byte))+"\n"
+                        totHex+=str(binascii.hexlify(byte))
                         
                         # aggiungo size all'indirzzo per andare all istruzione successiva'
                         addr = addr + insn.size
@@ -87,6 +83,8 @@ def main():
                     #finito il while modifico il contenuto dei nodi
                     G.node[str(n.id)]['label'] = totIstruzioni
                     G.node[str(n.id)]['asm'] = totHex
+                
+                #dizionario[nomeFunzione]=json.dumps(json_graph.node_link_data(G))
                 
                 #salvo il nostro grafo in json
                 file = open(nomeFunzione+".txt", "w")
