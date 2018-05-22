@@ -6,27 +6,9 @@ from werkzeug.utils import secure_filename
 
 #modifica la path di dove saranno caricati i file
 UPLOAD_FOLDER = 'C:\Users\Giuliano\Desktop\UploadingFiles'
-ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'out'])
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-@app.route('/', methods=['GET', 'POST'])
-def upload_file():
-    if request.method == 'POST':
-        if 'file' not in request.files:
-            flash('Nessun file')
-        file = request.files['file']
-        if file.filename == '':
-            flash('Nessun file selezionato')
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            return "Il file e' stato uploadato correttamente, i file al momento nel server sono:\n" + uploaded_file()
 
 @app.route('/estraiFunzioni', methods=['GET', 'POST'])
 def crea_funzioni():
@@ -34,9 +16,11 @@ def crea_funzioni():
         file = request.files['file']
         filename = secure_filename(file.filename)
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        
         print "Richiesto dizionario funzioni"
         
-        subprocess.check_call(['idat64.exe','-A', '-OIDAPython:script_crea_lista_funzioni.py', UPLOAD_FOLDER+'\\'+filename])
+        subprocess.check_call(['ida64.exe','-A', '-OIDAPython:script_crea_lista_funzioni.py', UPLOAD_FOLDER+'\\'+filename])
+        
         #elimino i database generati
         elementi = os.listdir(UPLOAD_FOLDER)
         for item in elementi:
@@ -53,7 +37,8 @@ def crea_grafi():
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         print "Richiesto dizionario grafi"
         
-        subprocess.check_call(['ida64.exe','-A', '-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'\\'+filename])
+        subprocess.check_call(['ida64.exe','-A', '-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'//'+filename])
+        
         #elimino i database generati
         elementi = os.listdir(UPLOAD_FOLDER)
         for item in elementi:
@@ -62,8 +47,7 @@ def crea_grafi():
                         
         return estrai_cfg(filename,UPLOAD_FOLDER)        
         
-def estrai_funzioni(input,path):
-      
+def estrai_funzioni(input,path):  
     #crea dizionario
     dizionario = dict()
 
@@ -111,18 +95,6 @@ def estrai_cfg(input,path):
     #termino
     print "Creazione dizionario grafi terminata"
     return json.dumps(dizionario)
-            
-      
-@app.route('/uploads', methods=['GET'])
-def uploaded_file():
-    tree=""
-    try: lst = os.listdir(UPLOAD_FOLDER)
-    except OSError:
-        pass #ignore errors
-    else:
-        for name in lst:
-                tree+=name+"\n"
-    return tree
 
 if __name__ == "__main__":
     app.run(debug=True)
