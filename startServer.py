@@ -3,6 +3,7 @@ import subprocess
 from flask import Flask, flash, request, redirect, url_for
 from flask import send_from_directory
 from werkzeug.utils import secure_filename
+import json
 
 #modifica la path di dove saranno caricati i file
 UPLOAD_FOLDER = 'C:\Users\Giuliano\Desktop\UploadingFiles'
@@ -13,12 +14,13 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 @app.route('/estraiFunzioni', methods=['GET', 'POST'])
 def crea_funzioni():
     if request.method == 'POST':
+        #salvo il file per poter avviare lo script
         file = request.files['file']
         filename = secure_filename(file.filename)
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         
         print "Richiesto dizionario funzioni"
-        
+        #subprocess.check_call(['idat64.exe','-A', '-OIDAPython:script_crea_lista_funzioni.py', UPLOAD_FOLDER+'\\'+filename])
         subprocess.check_call(['ida64.exe','-A', '-OIDAPython:script_crea_lista_funzioni.py', UPLOAD_FOLDER+'\\'+filename])
         
         #elimino i database generati
@@ -27,24 +29,30 @@ def crea_funzioni():
                 if item.endswith(".i64"):
                         os.remove(os.path.join(UPLOAD_FOLDER, item))
                         
+        #elimino il file passato
+        os.remove(os.path.join(UPLOAD_FOLDER, filename))                
         return estrai_funzioni(filename,UPLOAD_FOLDER+'\\')
 
 @app.route('/estraiCFG', methods=['GET', 'POST'])
 def crea_grafi():
     if request.method == 'POST':
+        #salvo il file per poter avviare lo script
         file = request.files['file']
         filename = secure_filename(file.filename)
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+
         print "Richiesto dizionario grafi"
-        
-        subprocess.check_call(['ida64.exe','-A', '-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'//'+filename])
+        #subprocess.check_call(['idat64.exe','-A', '-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'\\'+filename])
+        subprocess.check_call(['ida64.exe','-A', '-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'\\'+filename])
         
         #elimino i database generati
         elementi = os.listdir(UPLOAD_FOLDER)
         for item in elementi:
                 if item.endswith(".i64"):
                         os.remove(os.path.join(UPLOAD_FOLDER, item))
-                        
+                
+        #elimino il file passato
+        os.remove(os.path.join(UPLOAD_FOLDER, filename))              
         return estrai_cfg(filename,UPLOAD_FOLDER)        
         
 def estrai_funzioni(input,path):  
@@ -75,7 +83,7 @@ def estrai_cfg(input,path):
 
     #muoviamoci nella nuova cartella di lavoro
     os.chdir(nuovaCartella)
-    newElenco = os.listdir(path)
+    newElenco = os.listdir(nuovaCartella)
 
     #creo il dizionario ci aggiungo come key il nome della funzione (nome del file .txt) e come valore il contenuto del testo
     dizionario = dict()
@@ -86,7 +94,7 @@ def estrai_cfg(input,path):
             file.close()
 
             #elimino il file .txt di appoggio ora inutile
-            os.remove(os.path.join(path, item))
+            os.remove(os.path.join(nuovaCartella, item))
 
     #rimuovo la cartella di appoggio
     os.chdir(pathPartenza)

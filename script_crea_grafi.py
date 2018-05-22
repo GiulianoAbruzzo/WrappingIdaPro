@@ -4,10 +4,13 @@ import idc
 import os
 import json
 import binascii
+
+import sys
+sys.path.append("C:\python27-x64\Lib\site-packages")
 import networkx as nx
 from networkx.readwrite import json_graph
 
-def main():
+try:
     #inizializza la directory e la salviamo per dopo
     pathPartenza = os.getcwd()
     nuovaCartella= pathPartenza + "\Grafi_" + idaapi.get_root_filename()
@@ -83,16 +86,14 @@ def main():
                     #finito il while modifico il contenuto dei nodi
                     G.node[str(n.id)]['label'] = totIstruzioni
                     G.node[str(n.id)]['asm'] = totHex
-                
-                #dizionario[nomeFunzione]=json.dumps(json_graph.node_link_data(G))
-                
+                                
                 #salvo il nostro grafo in json
                 file = open(nomeFunzione+".txt", "w")
                 file.write(json.dumps(json_graph.node_link_data(G)))
                 file.close()
-             
-    # termina IDA
-    idc.Exit(0)
+  
+except:
+    print("ERROR DISASSEMBLING WITH IDA")
 
-if __name__ == "__main__":
-    main()
+# termina IDA
+idc.Exit(0)
