@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+    <head>
+        <script src="https://d3js.org/d3.v3.js"></script>
+        <script type="text/javascript" src="{{ url_for('static', filename='jsnetworkx.js') }}"></script>
+
+        
+        <style>
+            tr{cursor: pointer; transition: all .25s ease-in-out}
+            .selected{background-color: red; font-weight: bold; color: #fff;}
+        </style>
+    </head>
+    <body>
+    
+        <div class="container"
+            <div class="lista_funzioni" style="float:left;"> 
+            <table id="table" border="1">
+                <style>
+                    table  { 
+                        border-collapse:collapse
+                    }
+                    td, th { 
+                        border:1px solid #ddd;
+                        padding:8px;
+                    }
+                </style>
+            
+                <caption>
+                    <p>Lista funzioni:</p>
+                </caption>
+              
+                {% for name in listaF %}
+                    <tr>
+                        <td>{{ name }}</td>
+                    </tr>
+                {% endfor %}
+            </table>
+            </div>
+        
+            <div style="float:left; margin-left: 40px;">
+        
+                <div>
+                    <h1> Starting Address: </h1>
+                    <p id="startAd"></p>
+                </div>
+                
+                <div>
+                    <h1> Istruzioni Disassemblate: </h1>
+                    <p id="istruzioniDis"></p>
+                </div>
+                
+                <div>
+                    <h1> Grafo: </h1>
+                    <p id="grafo"></p>
+                </div>
+                
+            </div>
+         
+        </div>
+        
+        <div id="canvas" class="span9"></div>
+        
+        <script>
+            var diz= JSON.parse({{ dict|tojson }});
+        
+            function selectedRow(){
+                var index,table = document.getElementById("table");    
+                for(var i = 0; i < table.rows.length; i++) {
+                    table.rows[i].onclick = function() {
+                        // remove the background from the previous selected row
+                        if(typeof index !== "undefined"){
+                            table.rows[index].classList.toggle("selected");}
+                        // get the selected row index
+                        index = this.rowIndex;
+                        changeAddress(table.rows[index].innerText);
+                        // add class selected to the row
+                        this.classList.toggle("selected");
+                    };
+                }
+                        
+            }
+            selectedRow();
+            
+            function changeAddress(input) {
+                document.getElementById("startAd").innerText= diz[input]["address"];
+                document.getElementById("istruzioniDis").innerText= diz[input]["istruzioni"];
+                
+                var G = new jsnx.Graph(diz[input]["grafo"]);
+                jsnx.draw(G, {
+                    element: '#canvas',
+                    with_labels: true,
+                    labels: 'label'
+                });
+            }
+        </script>
+      
+   </body>
+</html>

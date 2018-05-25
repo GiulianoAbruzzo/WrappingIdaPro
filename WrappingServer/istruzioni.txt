@@ -1,0 +1,1 @@
+curl -F file=@C:\Users\Giuliano\Desktop\a_ARM.out http://127.0.0.1:5000/estrai
