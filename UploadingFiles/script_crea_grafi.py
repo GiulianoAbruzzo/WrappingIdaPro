@@ -44,9 +44,8 @@ try:
                 #itero sui nodi n e un oggetto nodo che ha tre campo id, startEA, endEA
                 for n in flowChart:
                 
-                    #se il nodo non e' presente nel grafo lo aggiungo
-                    if (str(n.id) not in G.nodes()):
-                        G.add_node(str(n.id),label='',asm='',address=n.startEA)
+                    #Aggiungo il nodo al grafo
+                    G.add_node(str(n.id),label='',asm='',address=n.startEA)
                         
                     #n contiene anche il metodo succs che mi ritona l id dei nodi successori
                     successors = []

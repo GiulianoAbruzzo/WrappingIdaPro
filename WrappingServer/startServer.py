@@ -12,10 +12,10 @@ UPLOAD_FOLDER = 'C:\Users\Giuliano\Desktop\UploadingFiles'
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     
-    
 @app.route("/upload", methods=['GET','POST'])
 def upload():
     if request.method == 'POST':
+        #salvo il file uploadato e faccio partire l'uploaded_file dove verra' visualizzato
         file = request.files['file']
         filename = secure_filename(file.filename)
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
@@ -32,44 +32,59 @@ def upload():
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
+    #carico il file delle visualizzazioni
     json_data= json.loads(visualizza_file(filename))
+    
+    #mi scrivo in lista tutti i nomi delle funzioni
     lista=list(json_data.keys())
+    
+    #scorri tutti i nomi per modificare i grafi
+    for item in lista:
+        #mi salvo il grafo (attualmente json)
+        G= json_graph.node_link_graph(json_data[item]["grafo"])
+        
+        #traduco con pydot il grafo in DOT
+        dG = nx.nx_pydot.to_pydot(G)
+        
+        #sostituisco il vecchio grafo JSON nel nuovo in DOT 
+        #lo salvo come una stringa poiche' non si puo' serializzare il formato DOT con json.dumps
+        json_data[item]["grafo"]=str(dG)
+        
+    #carico l'html passando la lista delle funzioni e il dizionario completo per la visualizzazione    
     return render_template("uploadedfile.html", listaF=lista, dict=json.dumps(json_data))
     
 def visualizza_file(filename):
+    #mi sposto nella cartella di upload
     currentpath=os.getcwd()
     os.chdir(UPLOAD_FOLDER)
         
+    #faccio partitre lo script di visualizzazione che salva il dizionario in un file di testo
     print "Richiesto visualizzazione"
     subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_visualizza.py', UPLOAD_FOLDER+'\\'+filename])
         
-    #elimino i database generati
+    #elimino i database generati da idat
     elementi = os.listdir(UPLOAD_FOLDER)
     for item in elementi:
         if item.endswith(".i64"):
             os.remove(os.path.join(UPLOAD_FOLDER, item))
-                        
-    #elimino il file passato
-    os.remove(os.path.join(UPLOAD_FOLDER, filename))                
-    return estrai_visualizza(filename,UPLOAD_FOLDER+'\\')       
     
-def estrai_visualizza(input,path):
-    #crea dizionario
-
+    #creo il dizionario
     diz=dict()
     
-    #apro il file che e' gia salvato in formato json
-    with open(path+"Visualizza_"+input+".txt","r") as f:
+    #apro il .txt (creato dallo script visualizza) che e' gia salvato in formato json
+    with open(UPLOAD_FOLDER+'\\'+"Visualizza_"+filename+".txt","r") as f:
         diz=f.read()
     
-    #elimino il .txt ora inutile
-    #os.remove(os.path.join(path, "Visualizza_"+input+".txt"))
+    #elimino il .txt contenente il dizionario (creato dallo script visualizza) ora inutile
+    os.remove(os.path.join(UPLOAD_FOLDER+'\\', "Visualizza_"+filename+".txt"))
+    
+    #elimino il binario passato
+    os.remove(os.path.join(UPLOAD_FOLDER, filename))
     
     #termino ritornando il dizionario gia in json
     print "Creazione visualizzazione terminata"
     return diz
-    
-    
+   
 @app.route('/estraiFunzioni', methods=['POST'])
 def crea_funzioni():
     #salvo il file per poter avviare lo script
@@ -179,5 +194,4 @@ def estrai_cfg(input,path):
     return json.dumps(dizionario)
 
 if __name__ == "__main__":
-    app.jinja_env.auto_reload = True
     app.run(debug=True)
