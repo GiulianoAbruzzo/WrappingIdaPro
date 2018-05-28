@@ -5,26 +5,13 @@ from werkzeug.utils import secure_filename
 import json
 import networkx as nx
 from networkx.readwrite import json_graph
-import pyrebase
-
-config = {
-    "apiKey": "AIzaSyCfjLyqAG31RR3NWqGoCVYI-t0GlZAzzMU",
-    "authDomain": "wrappingserver.firebaseapp.com",
-    "databaseURL": "https://wrappingserver.firebaseio.com",
-    "storageBucket": "wrappingserver.appspot.com"
-  };
-
-firebase = pyrebase.initialize_app(config)
-
 #INSERISCI QUI LA PATH DOVE VERRANNO UPLOADATI 
 #I FILE DEL SERVER E DOVE DEVI INSERIRE GLI SCRIPT "script_crea_grafi.py" e "script_crea_lista_funzioni.py"
 UPLOAD_FOLDER = 'C:\Users\Giuliano\Desktop\UploadingFiles'
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-firebase = pyrebase.initialize_app(config)
-db = firebase.database()
-
+    
 @app.route("/upload", methods=['GET','POST'])
 def upload():
     if request.method == 'POST':
@@ -43,35 +30,29 @@ def upload():
     </form>
     '''
 
-@app.route('/uploaded/<filename>', methods=['GET','POST'])
+@app.route('/uploads/<filename>')
 def uploaded_file(filename):
-    try:
-        result= db.child("Binari").child(filename.replace('.',',')).child("dizVisualizza").get()
-        json_data = json.loads(result.val())
-        lista=list(json_data.keys())
-    except:
-        json_data= json.loads(visualizza_file(filename))
-        #mi scrivo in lista tutti i nomi delle funzioni
-        lista=list(json_data.keys())
-        
-        #scorri tutti i nomi per modificare i grafi
-        for item in lista:
-            #mi salvo il grafo (attualmente json)
-            G= json_graph.node_link_graph(json_data[item]["grafo"])
-            
-            #traduco con pydot il grafo in DOT
-            dG = nx.nx_pydot.to_pydot(G)
-            
-            #sostituisco il vecchio grafo JSON nel nuovo in DOT 
-            #lo salvo come una stringa poiche' non si puo' serializzare il formato DOT con json.dumps
-            json_data[item]["grafo"]=str(dG)
+    #carico il file delle visualizzazioni
+    json_data= json.loads(visualizza_file(filename))
     
-        data = {"dizVisualizza": json.dumps(json_data)}
-        db.child("Binari").child(filename.replace('.',',')).set(data)
+    #mi scrivo in lista tutti i nomi delle funzioni
+    lista=list(json_data.keys())
+    
+    #scorri tutti i nomi per modificare i grafi
+    for item in lista:
+        #mi salvo il grafo (attualmente json)
+        G= json_graph.node_link_graph(json_data[item]["grafo"])
+        
+        #traduco con pydot il grafo in DOT
+        dG = nx.nx_pydot.to_pydot(G)
+        
+        #sostituisco il vecchio grafo JSON nel nuovo in DOT 
+        #lo salvo come una stringa poiche' non si puo' serializzare il formato DOT con json.dumps
+        json_data[item]["grafo"]=str(dG)
         
     #carico l'html passando la lista delle funzioni e il dizionario completo per la visualizzazione    
     return render_template("uploadedfile.html", listaF=lista, dict=json.dumps(json_data))
-        
+    
 def visualizza_file(filename):
     #mi sposto nella cartella di upload
     currentpath=os.getcwd()
@@ -98,7 +79,7 @@ def visualizza_file(filename):
     os.remove(os.path.join(UPLOAD_FOLDER+'\\', "Visualizza_"+filename+".txt"))
     
     #elimino il binario passato
-    os.remove(os.path.join(UPLOAD_FOLDER+'\\', filename))
+    os.remove(os.path.join(UPLOAD_FOLDER, filename))
     
     #termino ritornando il dizionario gia in json
     print "Creazione visualizzazione terminata"
@@ -212,17 +193,5 @@ def estrai_cfg(input,path):
     print "Creazione dizionario grafi terminata"
     return json.dumps(dizionario)
 
-@app.route('/uploaded',methods=['GET'])
-def listafile():
-        try:
-            lista=list()
-            all_file = db.child("Binari").get()
-            for file in all_file.each():
-                lista.append(file.key().replace(',','.'))
-                
-            return render_template("listafile.html", filelist=lista)
-        except:
-            return "Nessun file trovato"
-        
 if __name__ == "__main__":
     app.run(debug=True)
