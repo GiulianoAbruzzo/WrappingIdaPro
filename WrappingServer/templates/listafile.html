@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+    <body>
+        <div class="container">
+        <h1> Lista Binari nel database: </h1>
+
+            <ul>
+            {% for file in filelist %}
+              <li><a href="/uploaded/{{ file }}">{{ file }}</a></li>
+            {% endfor %}
+            </ul>
+        </div>
+   </body>
+</html>
