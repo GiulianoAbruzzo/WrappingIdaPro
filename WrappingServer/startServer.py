@@ -24,54 +24,60 @@ UPLOAD_FOLDER = 'C:\Users\Giuliano\Desktop\UploadingFiles'
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-#Inizializza il database di firebase
+#inizializza il database di firebase
 firebase = pyrebase.initialize_app(config)
 db = firebase.database()
 
 @app.route("/upload", methods=['GET','POST'])
 def upload():
     if request.method == 'POST':
-        #Lista dei file da uplodare
+        #lista dei file da uplodare
         uploaded_files = request.files.getlist("file[]")
         
-        #Se e' solo un file da uploadare salva il file e redirect alla pagina di visualizzazione
+        #se e' solo un file da uploadare salva il file e redirect alla pagina di visualizzazione
         if len(uploaded_files)==1:
             file = uploaded_files[0]
             filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            return redirect(url_for('uploaded_file',filename=filename))
             
-        #Altrimenti salva ogni file 
+            result= db.child("Binari").child(filename.replace('.',',')).child("dizVisualizza").get()
+            if (result.val() is None):
+                return redirect(url_for('uploaded_file',filename=filename))
+            else:
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                return redirect(url_for('uploaded_file',filename=filename))
+        #Altrimenti salva ogni file e redirect alla pagina con tutti i file presenti
         else:
             for file in uploaded_files:
                 filename = secure_filename(file.filename)
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                #Se il file non e' presente aggiungilo al database
+                #se il file non e' presente aggiungilo al database
                 try:
-                    #Sostituisco i punti con le virgole (le key di firebase non possono contenere alcuni caratteri)
+                    #sostituisco i punti con le virgole (le key di firebase non possono contenere alcuni caratteri)
                     result= db.child("Binari").child(filename.replace('.',',')).child("dizVisualizza").get()
                     json_data = json.loads(result.val())
                     lista=list(json_data.keys())
+                    
                 except:
                     json_data= json.loads(visualizza_file(filename))
                     
-                    #Scrivo in una lista tutti i nomi delle funzioni
+                    #scrivo in una lista tutti i nomi delle funzioni
                     lista=list(json_data.keys())
                     
-                    #Scorri tutti i nomi per modificare i grafi
+                    #scorri tutti i nomi per modificare i grafi
                     for item in lista:
-                        #Mi salvo il grafo (attualmente json)
+                        #salvo il grafo (attualmente json)
                         G= json_graph.node_link_graph(json_data[item]["grafo"])
                         
-                        #Traduco con pydot il grafo in DOT
+                        #traduco con pydot il grafo in DOT
                         dG = nx.nx_pydot.to_pydot(G)
                         
-                        #Sostituisco il vecchio grafo JSON nel nuovo in DOT 
+                        #sostituisco il vecchio grafo JSON nel nuovo in DOT 
                         #lo salvo come una stringa poiche' non si puo' serializzare il formato DOT con json.dumps
                         json_data[item]["grafo"]=str(dG)
                 
+                    #salvo il dizionario nel database
                     data = {"dizVisualizza": json.dumps(json_data)}
-                    db.child("Binari").child(filename.replace('.',',')).set(data)
+                    db.child("Binari").child(filename.replace('.',',')).update(data)
                     
             #Finito di uploadare i file redirecta alla lista dei file
             return redirect(url_for('listafile'))
@@ -87,12 +93,14 @@ def upload():
 
 @app.route('/uploaded/<filename>', methods=['GET','POST'])
 def uploaded_file(filename):
-    #Sostituisci i punti con le virgole
+    #Sostituisco i punti con le virgole per firebase e vedo se e' gia presente nel database
     try:
         result= db.child("Binari").child(filename.replace('.',',')).child("dizVisualizza").get()
         json_data = json.loads(result.val())
         lista=list(json_data.keys())
+        print "Dizionario visualizza gia' presente nel database"
     except:
+        #se non lo e' chiamo la funzione visualizza file che ritorna il dizionario della visualizzazione
         json_data= json.loads(visualizza_file(filename))
         #mi scrivo in lista tutti i nomi delle funzioni
         lista=list(json_data.keys())
@@ -111,7 +119,7 @@ def uploaded_file(filename):
     
         #Salvo nel database il dizionario visualizzazione
         data = {"dizVisualizza": json.dumps(json_data)}
-        db.child("Binari").child(filename.replace('.',',')).set(data)
+        db.child("Binari").child(filename.replace('.',',')).update(data)
         
     #carico l'html passando la lista delle funzioni e il dizionario completo per la visualizzazione    
     return render_template("uploadedfile.html", listaF=lista, dict=json.dumps(json_data))
@@ -150,60 +158,78 @@ def visualizza_file(filename):
    
 @app.route('/estraiFunzioni', methods=['POST'])
 def crea_funzioni():
-    #salvo il file per poter avviare lo script
+    #salvo il nome del file
     file = request.files['file']
     filename = secure_filename(file.filename)
-    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    
+    #se e' gia' presente nel database ritorna il valore altrimenti esegui lo script (sostituisco il punto poiche' non e' accettato da firebase nelle key)
+    try:
+        print "Dizionario funzioni gia presente nel database"
+        result= db.child("Binari").child(filename.replace('.',',')).child("dizFunzioni").get()
+        json_data = json.loads(result.val())
+        return json_data
+    except:
+        #salvo il file per poter avviare lo script
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         
-    #mi sposto nella cartella di upload e salvo la vecchia cartella di lavoro
-    currentpath=os.getcwd()
-    os.chdir(UPLOAD_FOLDER)
+        #mi sposto nella cartella di upload e salvo la vecchia cartella di lavoro
+        currentpath=os.getcwd()
+        os.chdir(UPLOAD_FOLDER)
+            
+        #chiamo lo script "script_crea_lista_funzioni.py"
+        print "Richiesto dizionario funzioni"
+        subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_lista_funzioni.py', UPLOAD_FOLDER+'\\'+filename])
         
-    #chiamo lo script "script_crea_lista_funzioni.py"
-    print "Richiesto dizionario funzioni"
-    subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_lista_funzioni.py', UPLOAD_FOLDER+'\\'+filename])
-        
-    #elimino i database generati
-    elementi = os.listdir(UPLOAD_FOLDER)
-    for item in elementi:
-        if item.endswith(".i64"):
-            os.remove(os.path.join(UPLOAD_FOLDER, item))
-                        
-    #elimino il file passato
-    os.remove(os.path.join(UPLOAD_FOLDER, filename))  
+        #elimino i database generati
+        elementi = os.listdir(UPLOAD_FOLDER)
+        for item in elementi:
+            if item.endswith(".i64"):
+                os.remove(os.path.join(UPLOAD_FOLDER, item))
+                            
+        #elimino il file passato
+        os.remove(os.path.join(UPLOAD_FOLDER, filename))  
 
-    #torno nella cartella del server e chiamo la funzione estrai_funzioni che mi ritorna un dizionario json
-    os.chdir(currentpath)    
-    return estrai_funzioni(filename,UPLOAD_FOLDER+'\\')
+        #torno nella cartella del server e chiamo la funzione estrai_funzioni che mi ritorna un dizionario json
+        os.chdir(currentpath)    
+        return estrai_funzioni(filename,UPLOAD_FOLDER+'\\')
 
 @app.route('/estraiCFG', methods=['POST'])
 def crea_grafi():
     #salvo il file per poter avviare lo script
     file = request.files['file']
     filename = secure_filename(file.filename)
-    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    
+    #cerco se e' gia' presente nel database se non lo e' avvio lo script altrimenti ritorno il valore del database
+    result= db.child("Binari").child(filename.replace('.',',')).child("dizGrafo").get()
+    
+    if (result.val() is None):
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        #mi sposto nella cartella di upload e salvo la vecchia cartella di lavoro
+        currentpath=os.getcwd()
+        os.chdir(UPLOAD_FOLDER)
+             
+        #chiamo lo script "script_crea_grafi.py"
+        print "Richiesto dizionario grafi"
+        subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'\\'+filename])
+            
+        #elimino i database generati
+        elementi = os.listdir(UPLOAD_FOLDER)
+        for item in elementi:
+            if item.endswith(".i64"):
+                os.remove(os.path.join(UPLOAD_FOLDER, item))
+                    
+        #elimino il file passato
+        os.remove(os.path.join(UPLOAD_FOLDER, filename))   
 
-    #mi sposto nella cartella di upload e salvo la vecchia cartella di lavoro
-    currentpath=os.getcwd()
-    os.chdir(UPLOAD_FOLDER)
-         
-    #chiamo lo script "script_crea_grafi.py"
-    print "Richiesto dizionario grafi"
-    subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'\\'+filename])
-        
-    #elimino i database generati
-    elementi = os.listdir(UPLOAD_FOLDER)
-    for item in elementi:
-        if item.endswith(".i64"):
-            os.remove(os.path.join(UPLOAD_FOLDER, item))
-                
-    #elimino il file passato
-    os.remove(os.path.join(UPLOAD_FOLDER, filename))   
-
-    #torno nella cartella del server e chiamo la funzione estrai_funzioni che mi ritorna un dizionario json
-    os.chdir(currentpath)
-    return estrai_cfg(filename,UPLOAD_FOLDER)        
-        
+        #torno nella cartella del server e chiamo la funzione estrai_funzioni che mi ritorna un dizionario json
+        os.chdir(currentpath)
+        return estrai_cfg(filename,UPLOAD_FOLDER)
+       
+    else:
+        print "Dizionario grafi gia presente nel database"
+        json_data = result.val()
+        return json_data
+                     
 def estrai_funzioni(input,path):  
     #crea dizionario
     dizionario = dict()
@@ -217,6 +243,10 @@ def estrai_funzioni(input,path):
     #elimino il .txt ora inutile
     os.remove(os.path.join(path, "ListaFunzioni_"+input+".txt"))
     
+    #salvo nel database il dizionario appena creato
+    data = {"dizFunzioni": json.dumps(diz)}
+    db.child("Binari").child(input.replace('.',',')).update(data)
+
     #termino ritornando il dizionario gia in json
     print "Creazione dizionario funzioni terminato"
     return diz
@@ -252,22 +282,34 @@ def estrai_cfg(input,path):
     os.chdir(pathPartenza)
     os.rmdir(nuovaCartella)
     
+    #salvo nel database il dizionario appena creato
+    data = {"dizGrafo": json.dumps(dizionario)}
+    db.child("Binari").child(input.replace('.',',')).update(data)
+    
     #termino ritornando il dizionario in json
     print "Creazione dizionario grafi terminata"
     return json.dumps(dizionario)
 
 @app.route('/uploaded',methods=['GET'])
 def listafile():
-        #Salvo in una lista tutti i binari caricati
+        #Salvo in una lista tutti i binari caricati con dizionario e quelli senza
         try:
             lista=list()
+            listaSenzaDiz=list()
+            
             all_file = db.child("Binari").get()
             for file in all_file.each():
-                lista.append(file.key().replace(',','.'))
-                
-            return render_template("listafile.html", filelist=lista)
+                result= db.child("Binari").child(file.key()).child("dizVisualizza").get()
+                if (result.val() is None):
+                    listaSenzaDiz.append(file.key().replace(',','.'))
+                    print file.key().replace(',','.')+": non e' presente nel database il dizionario visualizza e' necessario uploadarlo di nuovo"
+                else:
+                    lista.append(file.key().replace(',','.'))
+            
+            #carico l'html con la lista di tutti i file nel database
+            return render_template("listafile.html", filelist=lista, filelistsenzadiz=listaSenzaDiz)
         except:
-            return "Nessun file trovato"
+            return "Nessun file trovato o nessun file con dizionario visualizza"
         
 if __name__ == "__main__":
     app.run(debug=True)
