@@ -44,7 +44,7 @@
                     <h1> Grafo Funzione: </h1>
                 </div>
                 
-                <div id="chart" style="text-align: center;">
+                <div id="chart" width="510pt" style="text-align: center;">
                 </div>
                 
             </div>
@@ -93,8 +93,28 @@
                 
                 d3.select("#chart").graphviz()
                 .fade(false)
+                .attributer(attributer)
                 .renderDot(diz[input]["grafo"]);     
             }
+            
+            function attributer(datum, index, nodes) {
+                var selection = d3.select(this);
+                if (datum.tag == "svg") {
+                    var width = window.innerWidth;
+                    var height = window.innerHeight;
+                    var x = 650;
+                    var y = 1500;
+                    var scale = 1;
+                    selection
+                        .attr("width", width + "px")
+                        .attr("height", height + "px")
+                        .attr("viewBox", 0 + " " + 0 + " " + (x / scale) + " " + (y / scale));
+                    datum.attributes.width = x + "px";
+                    datum.attributes.height = y + "px";
+                    datum.attributes.viewBox = 0 + " " + 0 + " " + (x / scale) + " " + (y / scale);
+                }
+            }
+            
         </script>
       
    </body>

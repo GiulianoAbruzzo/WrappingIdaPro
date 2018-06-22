@@ -1,8 +1,0 @@
-Da prompt dei comandi di windows:
-
-(Inserire la cartella di ida nella PATH o inserire la path intera di ida.exe)
-
-ida.exe -A -OIDAPython:script_crea_grafi.py a_ARM.out
-
-Per 64bit:
-ida64.exe -A -OIDAPython:script_crea_grafi.py a_x86_64.out
