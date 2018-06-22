@@ -123,3 +123,5 @@ https://curl.haxx.se/download.html
 ```C
 https://www.python.org/downloads/release/python-2714/
 ```
+
+- Ida PRO e IDAPython
