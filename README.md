@@ -83,7 +83,7 @@ composto da:
 
 
 
-**E' anche possibile avviare i due script senza passare per il server**
+**E' anche possibile avviare gli script senza passare per il server**
 
 Da prompt dei comandi di windows:
 (Inserire la cartella di ida nella PATH o inserire la path intera di ida.exe)
