@@ -10,6 +10,7 @@ import sqlite3
 #INSERISCI QUI LA PATH DOVE VERRANNO UPLOADATI 
 #I FILE DEL SERVER E DOVE DEVI INSERIRE GLI SCRIPT "script_crea_grafi.py" e "script_crea_lista_funzioni.py"
 UPLOAD_FOLDER = 'C:\Users\Giuliano\Desktop\UploadingFiles'
+SERVER_LOC= 'C:\Users\Giuliano\Desktop\WrappingServer\databaseServer.db'
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -28,7 +29,7 @@ def upload():
             
         #Altrimenti salva ogni file e redirect alla pagina di tutti i file nel database
         else:
-            con= sqlite3.connect('C:\Users\Giuliano\Desktop\WrappingServer\databaseServer.db')
+            con= sqlite3.connect(SERVER_LOC)
             c=con.cursor()
             c.execute("CREATE TABLE IF NOT EXISTS tableV (id TEXT unique,dizV TEXT)") #visualizza
         
@@ -90,7 +91,7 @@ def upload():
 
 @app.route('/uploaded/<filename>', methods=['GET','POST'])
 def uploaded_file(filename):
-    con= sqlite3.connect('C:\Users\Giuliano\Desktop\WrappingServer\databaseServer.db')
+    con= sqlite3.connect(SERVER_LOC)
     c=con.cursor()
     c.execute("CREATE TABLE IF NOT EXISTS tableV (id TEXT unique,dizV TEXT)") #visualizza
     
@@ -156,7 +157,7 @@ def crea_funzioni():
     
     print os.getcwd()
     
-    con= sqlite3.connect('C:\Users\Giuliano\Desktop\WrappingServer\databaseServer.db')
+    con= sqlite3.connect(SERVER_LOC)
     c=con.cursor()
     c.execute("CREATE TABLE IF NOT EXISTS tableF (id TEXT unique,dizF TEXT)") #funzioni
     
@@ -214,7 +215,7 @@ def crea_grafi():
     file = request.files['file']
     filename = secure_filename(file.filename)
     
-    con= sqlite3.connect('C:\Users\Giuliano\Desktop\WrappingServer\databaseServer.db')
+    con= sqlite3.connect(SERVER_LOC)
     c=con.cursor()
     c.execute("CREATE TABLE IF NOT EXISTS tableG (id TEXT unique,dizG TEXT)") #grafi
     
@@ -348,7 +349,7 @@ def listafile():
         #Salvo in una lista tutti i binari caricati con dizionario visualizza
         #try:
         lista=list()
-        con= sqlite3.connect('C:\Users\Giuliano\Desktop\WrappingServer\databaseServer.db')
+        con= sqlite3.connect(SERVER_LOC)
         c=con.cursor()
         c.execute("CREATE TABLE IF NOT EXISTS tableV (id TEXT unique,dizV TEXT)") #visualizza
         c.execute("SELECT id FROM tableV")
