@@ -7,155 +7,62 @@ import networkx as nx
 from networkx.readwrite import json_graph
 import sqlite3
 
+from concurrent.futures import ThreadPoolExecutor
+
+#INSERISCI QUI IL NUMERO MASSIMO DI THREAD IN ESECUZIONE
+MAX_THREAD= 2;
+executor = ThreadPoolExecutor(MAX_THREAD)
+
 #INSERISCI QUI LA PATH DOVE VERRANNO UPLOADATI 
 #I FILE DEL SERVER E DOVE DEVI INSERIRE GLI SCRIPT "script_crea_grafi.py" e "script_crea_lista_funzioni.py"
 UPLOAD_FOLDER = 'C:\Users\Giuliano\Desktop\UploadingFiles'
-SERVER_LOC= 'C:\Users\Giuliano\Desktop\WrappingServer\databaseServer.db'
+SERVER_LOC = 'C:\Users\Giuliano\Desktop\WrappingServer\databaseServer.db'
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 @app.route("/upload", methods=['GET','POST'])
-def upload():
-    if request.method == 'POST':
-        #lista dei file da uplodare
-        uploaded_files = request.files.getlist("file[]")
-        
-        #se e' solo un file da uploadare salva il file e redirect alla pagina di visualizzazione
-        if len(uploaded_files)==1:
-            file = uploaded_files[0]
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            return redirect(url_for('uploaded_file',filename=filename))
-            
-        #Altrimenti salva ogni file e redirect alla pagina di tutti i file nel database
-        else:
-            con= sqlite3.connect(SERVER_LOC)
-            c=con.cursor()
-            c.execute("CREATE TABLE IF NOT EXISTS tableV (id TEXT unique,dizV TEXT)") #visualizza
-        
-            for file in uploaded_files:
-                filename = secure_filename(file.filename)
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                
-                c.execute("SELECT dizV FROM tableV WHERE id="+"'"+filename+"'")
-                result = c.fetchall()
-                if not result:
-                    json_data= json.loads(estrai_visualizza(filename))
-                    
-                    #scrivo in una lista tutti i nomi delle funzioni
-                    lista=list(json_data.keys())
-                    
-                    #scorri tutti i nomi per modificare i grafi
-                    for item in lista:
-                        #salvo il grafo (attualmente json)
-                        G= json_graph.node_link_graph(json_data[item]["grafo"])
-                        
-                        #traduco con pydot il grafo in DOT
-                        dG = nx.nx_pydot.to_pydot(G)
-                        
-                        #sostituisco il vecchio grafo JSON nel nuovo in DOT 
-                        #lo salvo come una stringa poiche' non si puo' serializzare il formato DOT con json.dumps
-                        json_data[item]["grafo"]=str(dG)
-                    
-                    try: 
-                        #tenta di inserire nel database il nuovo file
-                        c.execute('INSERT INTO tableV (id,dizV) VALUES (?, ?)',(filename,json.dumps(json_data)))
-                        con.commit()
-                    except:
-                        return "Errore non sono riuscito a inserire nel database il file:"+ filename
-                else:
-                    #result[0] restituisce la prima tupla con id=filename (id e' unico quindi avra size sempre o 0 se non e' presente o 1 se e' presente
-                    #lo restituisce in formato di tupla (diz,) quindi dobbiamo prendere il primo valore del primo risultato--> result[0][0]
-                    json_data = json.loads(result[0][0])
-                    
-                    #mi scrivo in lista tutti i nomi delle funzioni
-                    lista=list(json_data.keys())
-                    
-                    #elimino il binario passato
-                    os.remove(os.path.join(UPLOAD_FOLDER+'\\', filename))
-            
-            #chiudo le connessioni
-            c.close()
-            con.close()
-            
-            #Finito di uploadare i file redirecta alla lista dei file
-            return redirect(url_for('listafile'))
+def upload():       
+    #Carica la pagina html upload, nel momento del click di upload ci reindirizzera' alla pagina di caricamento
     return '''
     <!doctype html>
     <title>Wrapping Ida Pro</title>
     <h1>Carica un binario</h1>
-        <form action="upload" enctype="multipart/form-data" method="post">
+        <form action="caricamento" enctype="multipart/form-data" method="post">
         <input multiple="multiple" name="file[]" type="file" />
         <input type="submit" value="Upload" /></form>
-    '''
+    '''    
 
+@app.route('/caricamento', methods = ['POST'])
+def caricamento():
+    #Nel momento in cui arriviamo alla pagina del caricamento partira' un thread per l'upload sul server dei file
+    f=executor.submit(thread_upload_file,request.files.getlist("file[]"))
+    lista=f.result()
+    #Questo thread ci ritornera' una lista dei nomi dei file caricati sul server
+    
+    if len(lista)==1:
+        #Se e' solo un file ci spostiamo nella pagina della visualizzazione
+        return redirect(url_for('uploaded_file',filename=lista[0]))
+    else:
+        #Altrimenti in background carichera' i file nel server e ci sposa nella pagina della lista dei file sul database
+        for file in lista:
+            executor.submit(thread_uploaded,file)
+        return redirect(url_for('listafile'))
+    
 @app.route('/uploaded/<filename>', methods=['GET','POST'])
 def uploaded_file(filename):
-    con= sqlite3.connect(SERVER_LOC)
-    c=con.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS tableV (id TEXT unique,dizV TEXT)") #visualizza
+    #Appena arrivato nella pagina della visualizzazione di un file parte un thread per ottenere i dati all'interno del database o estrarli dal file
+    ff=executor.submit(thread_uploaded,filename)
+    risultati=ff.result()
     
-    c.execute("SELECT dizV FROM tableV WHERE id="+"'"+filename+"'")
-    result = c.fetchall()
-    if not result:
-        print "Dizionario visualizza "+filename+ " non trovato"
-    
-        #carica il dizionario creato dalla funzione estrai_visualizza
-        json_data= json.loads(estrai_visualizza(filename))
-        
-        #mi scrivo in lista tutti i nomi delle funzioni
-        lista=list(json_data.keys())
-        
-        #scorri tutti i nomi per modificare i grafi
-        for item in lista:
-            #mi salvo il grafo (attualmente json)
-            G= json_graph.node_link_graph(json_data[item]["grafo"])
-            
-            #traduco con pydot il grafo in DOT
-            dG = nx.nx_pydot.to_pydot(G)
-            
-            #sostituisco il vecchio grafo JSON nel nuovo in DOT 
-            #lo salvo come una stringa poiche' non si puo' serializzare il formato DOT con json.dumps
-            json_data[item]["grafo"]=str(dG)
-        
-        try: 
-            #tenta di inserire nel database il nuovo file e poi chiudo la connessione
-            c.execute('INSERT INTO tableV (id,dizV) VALUES (?, ?)',(filename,json.dumps(json_data)))
-            con.commit()
-        except:
-            return "Errore non sono riuscito a inserire nel database il file:"+ filename
-          
-        c.close()
-        con.close()
-        return render_template("uploadedfile.html", listaF=lista, dict=json.dumps(json_data))
-    else:
-        print "Dizionario visualizza "+filename+ " trovato"
-
-    
-        #result[0] restituisce la prima tupla con id=filename (id e' unico quindi avra size sempre o 0 se non e' presente o 1 se e' presente
-        #lo restituisce in formato di tupla (diz,) quindi dobbiamo prendere il primo valore del primo risultato--> result[0][0]
-        json_data = json.loads(result[0][0])
-        
-        #mi scrivo in lista tutti i nomi delle funzioni
-        lista=list(json_data.keys())
-        
-        #chiudo le connessioni
-        c.close()
-        con.close()
-        
-        #elimino il binario passato (uso il try perche' se accedo al file dalla lista dei file non sara' presente il binario)
-        try: os.remove(os.path.join(UPLOAD_FOLDER+'\\', filename))
-        except: pass
-        
-        return render_template("uploadedfile.html", listaF=lista, dict=json.dumps(json_data))    
-          
+    #Ottenuti i risultati carichiamo la visualizzazione del file
+    return render_template("uploadedfile.html", listaF=risultati[0], dict=risultati[1])
+         
 @app.route('/estraiFunzioni', methods=['POST'])
 def crea_funzioni():
     #salvo il nome del file
     file = request.files['file']
     filename = secure_filename(file.filename)
-    
-    print os.getcwd()
     
     con= sqlite3.connect(SERVER_LOC)
     c=con.cursor()
@@ -344,6 +251,94 @@ def estrai_visualizza(filename):
     #termino ritornando il dizionario gia in json
     return diz
     
+def thread_upload_file(uploaded_files):
+    #Creiamo una lista dove inseriremo tutti i nomi dei file che andiamo a caricare
+    lista=[]
+    for file in uploaded_files:
+        filename = secure_filename(file.filename)
+        
+        print("Lanciato thread upload di: " +filename)
+        
+        #Salviamo tutti i file nella cartella del server e infine ritorniamo la lista dei nomi dei file caricati
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        lista.append(filename)
+        
+        print("Terminato thread upload di: " +filename)
+    return lista
+    
+def thread_uploaded(filename):
+
+    #Creiamo una lista dove inseriremo la lista con i nomi della funzione in posizione x[0] e il grafo in x[1]
+    x=[]
+    print("Lanciato thread caricaricamento visualizzazione di: "+filename)
+    
+    con= sqlite3.connect(SERVER_LOC)
+    c=con.cursor()
+    c.execute("CREATE TABLE IF NOT EXISTS tableV (id TEXT unique,dizV TEXT)") #visualizza
+    
+    c.execute("SELECT dizV FROM tableV WHERE id="+"'"+filename+"'")
+    result = c.fetchall()
+    if not result:
+        #print "Dizionario visualizza "+filename+ " non trovato"
+    
+        #carica il dizionario creato dalla funzione estrai_visualizza
+        json_data= json.loads(estrai_visualizza(filename))
+        
+        #mi scrivo in lista tutti i nomi delle funzioni
+        lista=list(json_data.keys())
+        
+        #scorri tutti i nomi per modificare i grafi
+        for item in lista:
+            #mi salvo il grafo (attualmente json)
+            G= json_graph.node_link_graph(json_data[item]["grafo"])
+            
+            #traduco con pydot il grafo in DOT
+            dG = nx.nx_pydot.to_pydot(G)
+            
+            #sostituisco il vecchio grafo JSON nel nuovo in DOT 
+            #lo salvo come una stringa poiche' non si puo' serializzare il formato DOT con json.dumps
+            json_data[item]["grafo"]=str(dG)
+        
+        try: 
+            #tenta di inserire nel database il nuovo file e poi chiudo la connessione
+            c.execute('INSERT INTO tableV (id,dizV) VALUES (?, ?)',(filename,json.dumps(json_data)))
+            con.commit()
+        except:
+            return "Errore non sono riuscito a inserire nel database il file:"+ filename
+          
+        c.close()
+        con.close()
+        
+        x.append(lista)
+        x.append(json.dumps(json_data))
+        
+        print("Terminato thread caricaricamento visualizzazione di: "+filename)
+        return x
+        #return render_template("uploadedfile.html", listaF=lista, dict=json.dumps(json_data))
+    else:
+        #print "Dizionario visualizza "+filename+ " trovato"
+
+        #result[0] restituisce la prima tupla con id=filename (id e' unico quindi avra size sempre o 0 se non e' presente o 1 se e' presente
+        #lo restituisce in formato di tupla (diz,) quindi dobbiamo prendere il primo valore del primo risultato--> result[0][0]
+        json_data = json.loads(result[0][0])
+        
+        #mi scrivo in lista tutti i nomi delle funzioni
+        lista=list(json_data.keys())
+        
+        #chiudo le connessioni
+        c.close()
+        con.close()
+        
+        #elimino il binario passato (uso il try perche' se accedo al file dalla lista dei file non sara' presente il binario)
+        try: os.remove(os.path.join(UPLOAD_FOLDER+'\\', filename))
+        except: pass
+        
+        x.append(lista)
+        x.append(json.dumps(json_data))
+        
+        print("Terminato thread caricaricamento visualizzazione di: "+filename)
+        return x
+        
 @app.route('/uploaded',methods=['GET'])
 def listafile():
         #Salvo in una lista tutti i binari caricati con dizionario visualizza
@@ -363,4 +358,4 @@ def listafile():
             return render_template("listafile.html", filelist=lista)      
         
 if __name__ == "__main__":
-    app.run(debug=True, threaded=True)
+    app.run(debug=True)
