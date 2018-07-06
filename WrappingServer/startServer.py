@@ -6,7 +6,6 @@ import json
 import networkx as nx
 from networkx.readwrite import json_graph
 import sqlite3
-
 from concurrent.futures import ThreadPoolExecutor
 
 #INSERISCI QUI IL NUMERO MASSIMO DI THREAD IN ESECUZIONE
@@ -44,9 +43,11 @@ def caricamento():
         #Se e' solo un file ci spostiamo nella pagina della visualizzazione
         return redirect(url_for('uploaded_file',filename=lista[0]))
     else:
-        #Altrimenti in background carichera' i file nel server e ci sposa nella pagina della lista dei file sul database
+        #Altrimenti carica i file nel server e crea i loro dati di visualizzazione e ci sposta nella pagina della lista dei file sul database
         for file in lista:
             executor.submit(thread_uploaded,file)
+            
+        #QUI DEVO TROVARE UN MODO DI ATTENDERE CHE TUTTI I THREAD LANCIATI DAL FOR TERMINANO
         return redirect(url_for('listafile'))
     
 @app.route('/uploaded/<filename>', methods=['GET','POST'])
@@ -57,119 +58,32 @@ def uploaded_file(filename):
     
     #Ottenuti i risultati carichiamo la visualizzazione del file
     return render_template("uploadedfile.html", listaF=risultati[0], dict=risultati[1])
-         
+
+@app.route('/uploaded',methods=['GET'])
+def listafile():
+    #Faccio partire il thread per richiede la lista dei file
+    f=executor.submit(thread_lista_file)
+    
+    #Controllo di che tipo e' il result, se e' una stringa allora la tabella e' vuota
+    if isinstance(f.result(), basestring):
+        return "Nessun file trovato o nessun file con dizionario visualizza"
+        
+    #Altrimenti e' una lista e carico la lista dei file nel database
+    else:
+        #carico l'html con la lista di tutti i file nel database
+        return render_template("listafile.html", filelist=f.result())
+    
 @app.route('/estraiFunzioni', methods=['POST'])
 def crea_funzioni():
-    #salvo il nome del file
-    file = request.files['file']
-    filename = secure_filename(file.filename)
-    
-    con= sqlite3.connect(SERVER_LOC)
-    c=con.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS tableF (id TEXT unique,dizF TEXT)") #funzioni
-    
-    c.execute("SELECT dizF FROM tableF WHERE id="+"'"+filename+"'")
-    result = c.fetchall()
-    if not result:
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        
-        print ("Dizionario funzioni "+ filename + " non trovato")
-    
-        #mi sposto nella cartella di upload e salvo la vecchia cartella di lavoro
-        currentpath=os.getcwd()
-        os.chdir(UPLOAD_FOLDER)
-            
-        #chiamo lo script "script_crea_lista_funzioni.py"
-        subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_lista_funzioni.py', UPLOAD_FOLDER+'\\'+filename])
-            
-        #elimino i database generati
-        elementi = os.listdir(UPLOAD_FOLDER)
-        for item in elementi:
-            if item.endswith(".i64"):
-                os.remove(os.path.join(UPLOAD_FOLDER, item))
-                            
-        #elimino il file passato
-        os.remove(os.path.join(UPLOAD_FOLDER, filename))  
-
-        #torno nella cartella del server e chiamo la funzione estrai_funzioni che mi ritorna un dizionario json
-        os.chdir(currentpath)    
-        diz= estrai_funzioni(filename,UPLOAD_FOLDER+'\\')
-        
-        #tenta di inserire nel database il nuovo file e poi chiudo la connessione
-        try:
-            c.execute('INSERT INTO tableF (id,dizF) VALUES (?, ?)',(filename,json.dumps(diz)))
-            con.commit()
-            c.close()
-            con.close()
-            print "Inserito il dizionario funzioni di "+ filename
-            
-        except:
-            c.close()
-            con.close()
-            return "Errore non sono riuscito a inserire nel database il file: "+ filename
-         
-        return diz
-        
-    else:
-        print ("Dizionario funzioni "+filename+" trovato")
-        c.close()
-        con.close()
-        return result[0][0]
+    #faccio partire il thread della lista delle funzioni
+    f=executor.submit(thread_lista_funzioni,request.files['file'])
+    return f.result()
 
 @app.route('/estraiCFG', methods=['POST'])
 def crea_grafi():
-    #salvo il file per poter avviare lo script
-    file = request.files['file']
-    filename = secure_filename(file.filename)
-    
-    con= sqlite3.connect(SERVER_LOC)
-    c=con.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS tableG (id TEXT unique,dizG TEXT)") #grafi
-    
-    c.execute("SELECT dizG FROM tableG WHERE id="+"'"+filename+"'")
-    result = c.fetchall()
-    if not result:
-        print "Dizionario grafi "+filename+ " non trovato"
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        #mi sposto nella cartella di upload e salvo la vecchia cartella di lavoro
-        currentpath=os.getcwd()
-        os.chdir(UPLOAD_FOLDER)
-             
-        #chiamo lo script "script_crea_grafi.py"
-        subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'\\'+filename])
-            
-        #elimino i database generati
-        elementi = os.listdir(UPLOAD_FOLDER)
-        for item in elementi:
-            if item.endswith(".i64"):
-                os.remove(os.path.join(UPLOAD_FOLDER, item))
-                    
-        #elimino il file passato
-        os.remove(os.path.join(UPLOAD_FOLDER, filename))   
-
-        #torno nella cartella del server e chiamo la funzione estrai_funzioni che mi ritorna un dizionario json
-        os.chdir(currentpath)
-        diz= estrai_cfg(filename,UPLOAD_FOLDER)
-        
-        try: 
-            #tenta di inserire nel database il nuovo file e poi chiudo la connessione
-            c.execute('INSERT INTO tableG (id,dizG) VALUES (?, ?)',(filename,diz))
-            con.commit()
-            c.close()
-            con.close()
-            print "Inserito il dizionario grafi di "+ filename
-        except:
-            c.close()
-            con.close()
-            return "Errore non sono riuscito a inserire nel database il file: "+ filename
-        
-        return diz
-        
-    else:
-        print ("Dizionario grafi "+filename+" trovato")
-        c.close()
-        con.close()
-        return result[0][0]
+    #faccio partire il thread del grafo
+    f=executor.submit(thread_cfg,request.files['file'])
+    return f.result()
                       
 def estrai_funzioni(input,path):  
     #crea dizionario
@@ -267,15 +181,15 @@ def thread_upload_file(uploaded_files):
     return lista
     
 def thread_uploaded(filename):
-
     #Creiamo una lista dove inseriremo la lista con i nomi della funzione in posizione x[0] e il grafo in x[1]
     x=[]
     print("Lanciato thread caricaricamento visualizzazione di: "+filename)
     
+    #Ci connettiamo al database
     con= sqlite3.connect(SERVER_LOC)
     c=con.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS tableV (id TEXT unique,dizV TEXT)") #visualizza
     
+    #Cerchiamo se e' gia' presente un file con quel nome
     c.execute("SELECT dizV FROM tableV WHERE id="+"'"+filename+"'")
     result = c.fetchall()
     if not result:
@@ -309,6 +223,7 @@ def thread_uploaded(filename):
         c.close()
         con.close()
         
+        #Aggiungo alla lista i risultati prima di ritornarli 
         x.append(lista)
         x.append(json.dumps(json_data))
         
@@ -333,29 +248,166 @@ def thread_uploaded(filename):
         try: os.remove(os.path.join(UPLOAD_FOLDER+'\\', filename))
         except: pass
         
+        #aggiungo alla lista i risultati trovati
         x.append(lista)
         x.append(json.dumps(json_data))
         
         print("Terminato thread caricaricamento visualizzazione di: "+filename)
         return x
         
-@app.route('/uploaded',methods=['GET'])
-def listafile():
-        #Salvo in una lista tutti i binari caricati con dizionario visualizza
-        #try:
-        lista=list()
-        con= sqlite3.connect(SERVER_LOC)
-        c=con.cursor()
-        c.execute("CREATE TABLE IF NOT EXISTS tableV (id TEXT unique,dizV TEXT)") #visualizza
-        c.execute("SELECT id FROM tableV")
-        result = c.fetchall()
-        if not result:
-            return "Nessun file trovato o nessun file con dizionario visualizza"
-        else:
-            for file in result:
-                lista.append(file[0])
-            #carico l'html con la lista di tutti i file nel database
-            return render_template("listafile.html", filelist=lista)      
+def thread_lista_file():
+    print("Lanciato thread lista file nel database")
+    
+    #Creo una lista in cui andro' a inserire tutti i nomi dei file inseriti nel database
+    lista=list()
+    
+    #Mi connetto al database se non esiste creo' la tabella
+    con= sqlite3.connect(SERVER_LOC)
+    c=con.cursor()
+    
+    #Cerco tutti gli id e li aggiungo alla lista
+    c.execute("SELECT id FROM tableV")
+    result = c.fetchall()
+    
+    #Se non ci sono risultati (tabella vuota) termino ritornando una stringa 
+    if not result:
+        print("Terminato thread lista file nel database")
+        return "Nessun file trovato o nessun file con dizionario visualizza"
         
+    #Altrimenti aggiungo tutti i file alla lista e ritorno la lista
+    else:
+        for file in result:
+            lista.append(file[0])
+        print ("Terminato thread lista file nel database")
+        return lista
+              
+def thread_lista_funzioni(file):
+    #salvo il nome del file
+    filename = secure_filename(file.filename)
+    
+    print("Lanciato thread lista funzioni del file: "+filename)
+
+    #mi connetto al database
+    con= sqlite3.connect(SERVER_LOC)
+    c=con.cursor()
+    
+    #controllo se esiste gia' il dizionario delle funzioni di questo file
+    c.execute("SELECT dizF FROM tableF WHERE id="+"'"+filename+"'")
+    result = c.fetchall()
+    
+    #se non esiste creo il database
+    if not result:
+        #salvo il file per poterci lavorare sopra
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        
+        print ("Dizionario funzioni "+ filename + " non trovato")
+    
+        #mi sposto nella cartella di upload e salvo la vecchia cartella di lavoro
+        currentpath=os.getcwd()
+        os.chdir(UPLOAD_FOLDER)
+            
+        #chiamo lo script "script_crea_lista_funzioni.py"
+        subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_lista_funzioni.py', UPLOAD_FOLDER+'\\'+filename])
+            
+        #elimino i database generati
+        elementi = os.listdir(UPLOAD_FOLDER)
+        for item in elementi:
+            if item.endswith(".i64"):
+                os.remove(os.path.join(UPLOAD_FOLDER, item))
+                            
+        #elimino il file passato
+        os.remove(os.path.join(UPLOAD_FOLDER, filename))  
+
+        #torno nella cartella del server e chiamo la funzione estrai_funzioni che mi ritorna un dizionario json
+        os.chdir(currentpath)    
+        diz= estrai_funzioni(filename,UPLOAD_FOLDER+'\\')
+        
+        #tenta di inserire nel database il nuovo file e poi chiudo la connessione
+        try:
+            c.execute('INSERT INTO tableF (id,dizF) VALUES (?, ?)',(filename,json.dumps(diz)))
+            con.commit()
+            print "Inserito il dizionario funzioni di "+ filename
+            
+        except:
+            return "Errore non sono riuscito a inserire nel database il file: "+ filename
+            
+        c.close()
+        con.close()
+        
+        print("Terminato thread lista funzioni del file: "+filename)
+        return diz
+        
+    else:
+        print ("Dizionario funzioni "+filename+" trovato")
+        c.close()
+        con.close()
+ 
+        print("Terminato thread lista funzioni del file: "+filename)
+        return result[0][0]          
+         
+def thread_cfg(file):
+    #mi salvo il nome del file
+    filename = secure_filename(file.filename)
+    
+    #mi connetto al database
+    con= sqlite3.connect(SERVER_LOC)
+    c=con.cursor()
+    
+    #cerco se esiste gia' il dizionario del grafo del file
+    c.execute("SELECT dizG FROM tableG WHERE id="+"'"+filename+"'")
+    result = c.fetchall()
+    
+    print("Lanciato thread json grafo del file: "+filename)
+    
+    #se non esiste lo facciamo creare dallo script crea grafi
+    if not result:
+        print "Dizionario grafi "+filename+ " non trovato"
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        #mi sposto nella cartella di upload e salvo la vecchia cartella di lavoro
+        currentpath=os.getcwd()
+        os.chdir(UPLOAD_FOLDER)
+             
+        #chiamo lo script "script_crea_grafi.py"
+        subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'\\'+filename])
+            
+        #elimino i database generati
+        elementi = os.listdir(UPLOAD_FOLDER)
+        for item in elementi:
+            if item.endswith(".i64"):
+                os.remove(os.path.join(UPLOAD_FOLDER, item))
+                    
+        #elimino il file passato
+        os.remove(os.path.join(UPLOAD_FOLDER, filename))   
+
+        #torno nella cartella del server e chiamo la funzione estrai_funzioni che mi ritorna un dizionario json
+        os.chdir(currentpath)
+        diz= estrai_cfg(filename,UPLOAD_FOLDER)
+        
+        try: 
+            #tenta di inserire nel database il nuovo file e poi chiudo la connessione
+            c.execute('INSERT INTO tableG (id,dizG) VALUES (?, ?)',(filename,diz))
+            con.commit()
+            print "Inserito il dizionario grafi di "+ filename
+        except:
+            return "Errore non sono riuscito a inserire nel database il file: "+ filename
+        
+        c.close()
+        con.close()
+        print("Terminato thread json grafo del file: "+filename)
+        return diz
+        
+    else:
+        print ("Dizionario grafi "+filename+" trovato")
+        c.close()
+        con.close()
+        print("Terminato thread json grafo del file: "+filename)
+        return result[0][0]
+         
 if __name__ == "__main__":
+    #Appena avviamo il server creiamo il database se non esiste
+    con= sqlite3.connect(SERVER_LOC)
+    c=con.cursor()
+    c.execute("CREATE TABLE IF NOT EXISTS tableF (id TEXT unique,dizF TEXT)") #funzioni
+    c.execute("CREATE TABLE IF NOT EXISTS tableG (id TEXT unique,dizG TEXT)") #grafi
+    c.execute("CREATE TABLE IF NOT EXISTS tableV (id TEXT unique,dizV TEXT)") #visualizza  
     app.run(debug=True)
