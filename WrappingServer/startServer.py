@@ -9,7 +9,7 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
 #INSERISCI QUI IL NUMERO MASSIMO DI THREAD IN ESECUZIONE
-MAX_THREAD= 2;
+MAX_THREAD= 20;
 executor = ThreadPoolExecutor(MAX_THREAD)
 
 #INSERISCI QUI LA PATH DOVE VERRANNO UPLOADATI 
@@ -44,10 +44,11 @@ def caricamento():
         return redirect(url_for('uploaded_file',filename=lista[0]))
     else:
         #Altrimenti carica i file nel server e crea i loro dati di visualizzazione e ci sposta nella pagina della lista dei file sul database
-        for file in lista:
-            executor.submit(thread_uploaded,file)
-            
-        #QUI DEVO TROVARE UN MODO DI ATTENDERE CHE TUTTI I THREAD LANCIATI DAL FOR TERMINANO
+        futureList=[executor.submit(thread_uploaded,file) for file in lista]
+        
+        #Aspetto la fine di tutti i thread lanciati
+        for t in futureList:
+            t.result()
         return redirect(url_for('listafile'))
     
 @app.route('/uploaded/<filename>', methods=['GET','POST'])
@@ -138,8 +139,12 @@ def estrai_visualizza(filename):
     os.chdir(UPLOAD_FOLDER)
         
     #faccio partitre lo script di visualizzazione che salva il dizionario in un file di testo
-    subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_visualizza.py', UPLOAD_FOLDER+'\\'+filename])
-        
+    
+    try:
+        subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_visualizza.py', UPLOAD_FOLDER+'\\'+filename])
+    except:
+        return "Errore nell'avvio di ida nella generazione della visualizzazione del file: "+filename
+      
     #elimino i database generati da idat
     elementi = os.listdir(UPLOAD_FOLDER)
     for item in elementi:
@@ -307,8 +312,11 @@ def thread_lista_funzioni(file):
         os.chdir(UPLOAD_FOLDER)
             
         #chiamo lo script "script_crea_lista_funzioni.py"
-        subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_lista_funzioni.py', UPLOAD_FOLDER+'\\'+filename])
-            
+        try:
+            subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_lista_funzioni.py', UPLOAD_FOLDER+'\\'+filename])
+        except:
+            return "Errore nell'avvio di ida nella generazione della lista delle funzioni del file: "+filename
+
         #elimino i database generati
         elementi = os.listdir(UPLOAD_FOLDER)
         for item in elementi:
@@ -368,8 +376,11 @@ def thread_cfg(file):
         os.chdir(UPLOAD_FOLDER)
              
         #chiamo lo script "script_crea_grafi.py"
-        subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'\\'+filename])
-            
+        try:
+            subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'\\'+filename])
+        except:
+            return "Errore nell'avvio di ida nella generazione dei grafi del file: "+filename
+        
         #elimino i database generati
         elementi = os.listdir(UPLOAD_FOLDER)
         for item in elementi:
