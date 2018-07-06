@@ -6,7 +6,7 @@ import json
 import networkx as nx
 from networkx.readwrite import json_graph
 import sqlite3
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 
 #INSERISCI QUI IL NUMERO MASSIMO DI THREAD IN ESECUZIONE
 MAX_THREAD= 20;
@@ -43,12 +43,9 @@ def caricamento():
         #Se e' solo un file ci spostiamo nella pagina della visualizzazione
         return redirect(url_for('uploaded_file',filename=lista[0]))
     else:
-        #Altrimenti carica i file nel server e crea i loro dati di visualizzazione e ci sposta nella pagina della lista dei file sul database
-        futureList=[executor.submit(thread_uploaded,file) for file in lista]
-        
-        #Aspetto la fine di tutti i thread lanciati
-        for t in futureList:
-            t.result()
+        #Altrimenti lancia un thread per ogni file nella lista, crea la loro visualizzazione e aspetta la terminazione dei thread
+        wait([executor.submit(thread_uploaded,file) for file in lista]).done
+        #Terminati i thread mi redirecta alla pagina della listafile
         return redirect(url_for('listafile'))
     
 @app.route('/uploaded/<filename>', methods=['GET','POST'])
@@ -139,12 +136,8 @@ def estrai_visualizza(filename):
     os.chdir(UPLOAD_FOLDER)
         
     #faccio partitre lo script di visualizzazione che salva il dizionario in un file di testo
-    
-    try:
-        subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_visualizza.py', UPLOAD_FOLDER+'\\'+filename])
-    except:
-        return "Errore nell'avvio di ida nella generazione della visualizzazione del file: "+filename
-      
+    subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_visualizza.py', UPLOAD_FOLDER+'\\'+filename])
+        
     #elimino i database generati da idat
     elementi = os.listdir(UPLOAD_FOLDER)
     for item in elementi:
@@ -198,7 +191,7 @@ def thread_uploaded(filename):
     c.execute("SELECT dizV FROM tableV WHERE id="+"'"+filename+"'")
     result = c.fetchall()
     if not result:
-        #print "Dizionario visualizza "+filename+ " non trovato"
+        print ("Dizionario visualizza "+filename+ " non trovato")
     
         #carica il dizionario creato dalla funzione estrai_visualizza
         json_data= json.loads(estrai_visualizza(filename))
@@ -222,6 +215,7 @@ def thread_uploaded(filename):
             #tenta di inserire nel database il nuovo file e poi chiudo la connessione
             c.execute('INSERT INTO tableV (id,dizV) VALUES (?, ?)',(filename,json.dumps(json_data)))
             con.commit()
+            print ("Inserito il dizionario visualizzazione di "+ filename)
         except:
             return "Errore non sono riuscito a inserire nel database il file:"+ filename
           
@@ -236,7 +230,7 @@ def thread_uploaded(filename):
         return x
         #return render_template("uploadedfile.html", listaF=lista, dict=json.dumps(json_data))
     else:
-        #print "Dizionario visualizza "+filename+ " trovato"
+        print ("Dizionario visualizza "+filename+ " trovato")
 
         #result[0] restituisce la prima tupla con id=filename (id e' unico quindi avra size sempre o 0 se non e' presente o 1 se e' presente
         #lo restituisce in formato di tupla (diz,) quindi dobbiamo prendere il primo valore del primo risultato--> result[0][0]
@@ -312,11 +306,8 @@ def thread_lista_funzioni(file):
         os.chdir(UPLOAD_FOLDER)
             
         #chiamo lo script "script_crea_lista_funzioni.py"
-        try:
-            subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_lista_funzioni.py', UPLOAD_FOLDER+'\\'+filename])
-        except:
-            return "Errore nell'avvio di ida nella generazione della lista delle funzioni del file: "+filename
-
+        subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_lista_funzioni.py', UPLOAD_FOLDER+'\\'+filename])
+            
         #elimino i database generati
         elementi = os.listdir(UPLOAD_FOLDER)
         for item in elementi:
@@ -334,7 +325,7 @@ def thread_lista_funzioni(file):
         try:
             c.execute('INSERT INTO tableF (id,dizF) VALUES (?, ?)',(filename,json.dumps(diz)))
             con.commit()
-            print "Inserito il dizionario funzioni di "+ filename
+            print ("Inserito il dizionario funzioni di "+ filename)
             
         except:
             return "Errore non sono riuscito a inserire nel database il file: "+ filename
@@ -376,11 +367,8 @@ def thread_cfg(file):
         os.chdir(UPLOAD_FOLDER)
              
         #chiamo lo script "script_crea_grafi.py"
-        try:
-            subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'\\'+filename])
-        except:
-            return "Errore nell'avvio di ida nella generazione dei grafi del file: "+filename
-        
+        subprocess.check_call(['idat64.exe','-A','-OIDAPython:script_crea_grafi.py', UPLOAD_FOLDER+'\\'+filename])
+            
         #elimino i database generati
         elementi = os.listdir(UPLOAD_FOLDER)
         for item in elementi:
@@ -398,7 +386,7 @@ def thread_cfg(file):
             #tenta di inserire nel database il nuovo file e poi chiudo la connessione
             c.execute('INSERT INTO tableG (id,dizG) VALUES (?, ?)',(filename,diz))
             con.commit()
-            print "Inserito il dizionario grafi di "+ filename
+            print ("Inserito il dizionario grafi di "+ filename)
         except:
             return "Errore non sono riuscito a inserire nel database il file: "+ filename
         
