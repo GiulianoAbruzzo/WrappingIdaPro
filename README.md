@@ -112,6 +112,12 @@ $ pip install networkx
 $ pip install flask
 ```
 
+- Futures
+
+```C
+$ pip install futures
+```
+
 - cURL
 
 ```C
