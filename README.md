@@ -118,6 +118,12 @@ $ pip install flask
 $ pip install futures
 ```
 
+- Pydot
+
+```C
+$ pip install pydot
+```
+
 - cURL
 
 ```C
