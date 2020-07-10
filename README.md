@@ -1,5 +1,4 @@
 # WrappingIdaPro
-
 Wrapping di IdaPro con l'utilizzo di IdaPython, Flask, SQLite.
 
 ### Specifiche progetto
